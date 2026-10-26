@@ -1,0 +1,135 @@
+@import url('https://fonts.googleapis.com/css2?family=Fredoka:wght@400;500;600;700&family=Outfit:wght@300;400;500;600;700;800&display=swap');
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    --background: 210 60% 96%;
+    --foreground: 225 64% 26%;
+    --card: 0 0% 100%;
+    --card-foreground: 225 64% 26%;
+    --popover: 0 0% 100%;
+    --popover-foreground: 225 64% 26%;
+    --primary: 210 90% 56%;
+    --primary-foreground: 0 0% 100%;
+    --secondary: 210 80% 90%;
+    --secondary-foreground: 225 64% 30%;
+    --muted: 210 60% 94%;
+    --muted-foreground: 215 25% 45%;
+    --accent: 210 80% 90%;
+    --accent-foreground: 225 64% 30%;
+    --destructive: 0 84% 60%;
+    --destructive-foreground: 0 0% 100%;
+    --border: 205 70% 88%;
+    --input: 205 70% 88%;
+    --ring: 210 90% 56%;
+    --chart-1: 210 90% 56%;
+    --chart-2: 135 67% 55%;
+    --chart-3: 326 90% 72%;
+    --chart-4: 48 96% 60%;
+    --chart-5: 262 70% 65%;
+    --radius: 1.25rem;
+    --font-heading: 'Fredoka', ui-sans-serif, system-ui, sans-serif;
+    --font-body: 'Outfit', ui-sans-serif, system-ui, sans-serif;
+    --font-display: 'Fredoka', ui-sans-serif, system-ui, sans-serif;
+    --font-mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+    --accent-pink: 327 90% 92%;
+    --accent-yellow: 48 96% 89%;
+    --accent-mint: 135 67% 88%;
+    --accent-blue: 210 80% 94%;
+    --sidebar-background: 0 0% 100%;
+    --sidebar-foreground: 225 64% 26%;
+    --sidebar-primary: 210 90% 56%;
+    --sidebar-primary-foreground: 0 0% 100%;
+    --sidebar-accent: 210 80% 94%;
+    --sidebar-accent-foreground: 225 64% 30%;
+    --sidebar-border: 205 70% 88%;
+    --sidebar-ring: 210 90% 56%;
+  }
+
+  .dark {
+    --background: 224 47% 11%;
+    --foreground: 210 60% 96%;
+    --card: 224 40% 16%;
+    --card-foreground: 210 60% 96%;
+    --popover: 224 40% 16%;
+    --popover-foreground: 210 60% 96%;
+    --primary: 210 90% 60%;
+    --primary-foreground: 0 0% 100%;
+    --secondary: 224 35% 22%;
+    --secondary-foreground: 210 60% 96%;
+    --muted: 224 35% 22%;
+    --muted-foreground: 215 25% 65%;
+    --accent: 224 35% 22%;
+    --accent-foreground: 210 90% 70%;
+    --destructive: 0 70% 55%;
+    --destructive-foreground: 0 0% 100%;
+    --border: 224 35% 28%;
+    --input: 224 35% 28%;
+    --ring: 210 90% 60%;
+    --sidebar-background: 224 47% 13%;
+    --sidebar-foreground: 210 60% 96%;
+    --sidebar-primary: 210 90% 60%;
+    --sidebar-primary-foreground: 0 0% 100%;
+    --sidebar-accent: 224 35% 22%;
+    --sidebar-accent-foreground: 210 90% 70%;
+    --sidebar-border: 224 35% 28%;
+    --sidebar-ring: 210 90% 60%;
+  }
+}
+
+@layer base {
+  * {
+    @apply border-border outline-ring/50;
+  }
+
+  body {
+    @apply bg-background text-foreground font-body antialiased;
+  }
+
+  h1, h2, h3, h4 {
+    @apply font-heading;
+  }
+}
+
+@layer utilities {
+  .no-scrollbar::-webkit-scrollbar {
+    display: none;
+  }
+  .no-scrollbar {
+    -ms-overflow-style: none;
+    scrollbar-width: none;
+  }
+  .glass {
+    background: hsl(0 0% 100% / 0.72);
+    backdrop-filter: blur(14px);
+    -webkit-backdrop-filter: blur(14px);
+  }
+  .text-gradient {
+    background: linear-gradient(135deg, hsl(210 90% 50%), hsl(262 70% 62%));
+    -webkit-background-clip: text;
+    background-clip: text;
+    color: transparent;
+  }
+  .cheerful-bg {
+    background:
+      radial-gradient(circle at 10% 12%, hsl(48 96% 89% / 0.55), transparent 38%),
+      radial-gradient(circle at 90% 8%, hsl(327 90% 92% / 0.5), transparent 36%),
+      radial-gradient(circle at 82% 92%, hsl(210 80% 90% / 0.6), transparent 42%),
+      radial-gradient(circle at 18% 88%, hsl(135 67% 88% / 0.4), transparent 40%),
+      linear-gradient(135deg, hsl(210 70% 97%), hsl(205 65% 95%));
+  }
+  .dashed-pink {
+    border: 2px dashed hsl(327 90% 80%);
+  }
+}
+
+@media print {
+  body {
+    background: white !important;
+  }
+  .print\:hidden {
+    display: none !important;
+  }
+}
