@@ -37,8 +37,8 @@ prontuários, odontograma e análise de raio-x por IA.
 
 ## IA: só Gemini, sem OpenAI
 
-A análise de raio-x usa o Gemini (modelo `gemini-3.8-flash`, com
-fallback para o mesmo modelo se o configurado der 404), pela API nativa
+A análise de raio-x usa o Gemini (modelo `gemini-3.5-flash-lite` por padrão, o modelo do tier gratuito, com
+fallback para `gemini-3.8-flash` só se o configurado der 404), pela API nativa
 do Gemini, com a imagem enviada em base64 e o mesmo esquema JSON
 estruturado do original (tipo de exame, qualidade, achados com
 severidade e confiança, diferencial, conduta e urgência).

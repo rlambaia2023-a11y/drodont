@@ -17,7 +17,8 @@ dados somem a cada redeploy. Entidades de pacientes/prontuários só
 devolvem registros do próprio usuário logado; Medication é pública.
 
 IA: só Gemini, sem OpenAI. Raio-x por Gemini Vision
-(gemini-3.8-flash, imagem em base64, esquema JSON estruturado); sem
+(gemini-3.5-flash-lite por padrão, imagem em base64, esquema JSON estruturado,
+cache por hash da imagem + contexto, sem retry em cota 429); sem
 GEMINI_API_KEY, erro honesto, sem inventar achado clínico. Lembretes de
 retorno: endpoint lista os vencimentos, mas não envia e-mail (sem SMTP)
 e não marca como lembrado.

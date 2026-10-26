@@ -5,7 +5,8 @@
 // Pacientes/prontuários: só o próprio usuário logado vê e altera os seus
 // registros (created_by = e-mail). Medication é pública para leitura.
 // IA: só Gemini, sem OpenAI. Raio-x pela API nativa do Gemini
-// (gemini-3.8-flash, imagem em base64, esquema JSON estruturado).
+// (gemini-3.5-flash-lite por padrão, imagem em base64, esquema JSON estruturado,
+// cache por hash da imagem + contexto, sem retry em cota 429).
 // Sem GEMINI_API_KEY, erro honesto, sem inventar achado clínico.
 import http from 'node:http'
 import fs from 'node:fs'
@@ -20,12 +21,12 @@ const DATA_DIR = process.env.DATA_DIR || (fs.existsSync('/app/data') ? '/app/dat
 const UPLOAD_DIR = path.join(DATA_DIR, 'uploads')
 const DB_FILE = path.join(DATA_DIR, 'drodont-db.json')
 const GEMINI_KEY = process.env.GEMINI_API_KEY || ''
-const GEMINI_MODEL = process.env.GEMINI_MODEL || 'gemini-3.8-flash'
+const GEMINI_MODEL = process.env.GEMINI_MODEL || 'gemini-3.5-flash-lite'
 
 const TYPES = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript; charset=utf-8', '.css': 'text/css; charset=utf-8', '.json': 'application/json; charset=utf-8', '.png': 'image/png', '.jpg': 'image/jpeg', '.jpeg': 'image/jpeg', '.webp': 'image/webp', '.svg': 'image/svg+xml', '.ico': 'image/x-icon', '.pdf': 'application/pdf', '.woff': 'font/woff', '.woff2': 'font/woff2', '.ttf': 'font/ttf', '.gif': 'image/gif' }
 const COLLECTIONS = { Patient: 'patients', ClinicalEntry: 'clinicalEntries', FollowUp: 'followUps', Odontogram: 'odontograms', Prescription: 'prescriptions', PrescriptionTemplate: 'prescriptionTemplates', SavedCase: 'savedCases', WeightEntry: 'weightEntries', XrayAnalysis: 'xrayAnalyses', Medication: 'medications' }
 
-function emptyDb() { const db = { users: {}, tokens: {} }; for (const k of Object.values(COLLECTIONS)) db[k] = []; return db }
+function emptyDb() { const db = { users: {}, tokens: {}, xrayCache: [] }; for (const k of Object.values(COLLECTIONS)) db[k] = []; return db }
 function loadDb() { try { return { ...emptyDb(), ...JSON.parse(fs.readFileSync(DB_FILE, 'utf-8')) } } catch { return emptyDb() } }
 function saveDb(db) { fs.mkdirSync(DATA_DIR, { recursive: true }); const tmp = DB_FILE + '.tmp'; fs.writeFileSync(tmp, JSON.stringify(db)); fs.renameSync(tmp, DB_FILE) }
 let db = loadDb()
@@ -73,6 +74,10 @@ Responda SOMENTE com JSON válido, sem markdown, seguindo exatamente este esquem
 {"exam_type":"string","image_quality":{"adequate":true,"issues":"string"},"regions_observed":["string"],"findings":[{"tooth":"string","finding":"string","severity":"leve|moderada|severa|não aplicável","confidence":"alto|médio|baixo","description":"string"}],"differential":["string"],"recommendations":["string"],"solution":{"approach":"string","steps":["string"],"urgency":"rotina|preferencial|urgente"},"disclaimer":"string"}`
 
 async function analyzeXrayWithGemini(buf, mimeType, patientContext) {
+  // Melhorias grátis (2026-10-26): modelo padrão Flash-Lite (tier gratuito),
+  // sem retry em cota: um 429 (quota esgotada) para na hora e devolve erro
+  // em pt-BR, sem tentar outro modelo e sem gastar mais chamadas. Só o 404
+  // (modelo descontinuado) cai para o gemini-3.8-flash.
   const models = [...new Set([GEMINI_MODEL, 'gemini-3.8-flash'])]
   let lastError = null
   for (const model of models) {
@@ -85,7 +90,15 @@ async function analyzeXrayWithGemini(buf, mimeType, patientContext) {
       ] }], generationConfig: { temperature: 0.2 } }),
     })
     const data = await res.json().catch(() => ({}))
-    if (!res.ok) { lastError = new Error(data?.error?.message || `Gemini retornou ${res.status}`); if (res.status !== 404 || model === models[models.length - 1]) break; continue }
+    if (!res.ok) {
+      lastError = new Error(data?.error?.message || `Gemini retornou ${res.status}`)
+      if (res.status === 429) {
+        // Cota: não tenta outro modelo. Mensagem clara, sem gastar mais.
+        const retry = (data?.error?.message || '').match(/retry in ([0-9]+h[0-9]+m[0-9.]+s)/i)
+        throw new Error(`Cota gratuita do Gemini esgotada${retry ? `, tente de novo em cerca de ${retry[1].replace(/\.[0-9]+s$/, 's')}` : ''}. Nenhuma outra chamada foi feita.`)
+      }
+      if (res.status !== 404 || model === models[models.length - 1]) break; continue
+    }
     const text = (data?.candidates?.[0]?.content?.parts || []).map((p) => p.text || '').join('')
     const clean = String(text).replace(/```json|```/g, '').trim()
     const start = clean.indexOf('{'), end = clean.lastIndexOf('}')
@@ -183,11 +196,22 @@ async function handleApi(req, res, url) {
       if (!imageUrl.startsWith('/uploads/')) return json(res, 400, { error: 'Envie a imagem pelo upload do próprio sistema (/uploads/*). URLs externas não são aceitas.' })
       const filePath = path.join(UPLOAD_DIR, path.basename(decodeURIComponent(imageUrl)))
       if (!fs.existsSync(filePath)) return json(res, 404, { error: 'Imagem não encontrada. Envie novamente.' })
+      // Cache grátis: mesma imagem + mesmo contexto, mesmo usuário, não
+      // gasta cota de novo. O cache vale mesmo sem chave ativa, porque
+      // nenhum chamado ao Gemini é feito nesse caso.
+      const imageBytes = fs.readFileSync(filePath)
+      const cacheKey = crypto.createHash('sha256').update(imageBytes).update('|').update(patientContext.trim().toLowerCase()).digest('hex')
+      const cached = (db.xrayCache || []).find((c) => c.created_by === email && c.key === cacheKey)
+      if (cached) return json(res, 200, { analysis: cached.analysis, cached: true, ia_configurada: Boolean(GEMINI_KEY), provedor: 'gemini', modelo: GEMINI_MODEL })
       if (!GEMINI_KEY) return json(res, 503, { error: 'IA não configurada neste servidor. Configure GEMINI_API_KEY nas variáveis da Railway para ligar a análise de raio-x. Nenhum achado foi inventado.' })
       const mime = TYPES[path.extname(filePath).toLowerCase()] || 'image/jpeg'
       try {
-        const analysis = await analyzeXrayWithGemini(fs.readFileSync(filePath), mime, patientContext)
-        return json(res, 200, { analysis, ia_configurada: true, provedor: 'gemini', modelo: GEMINI_MODEL })
+        const analysis = await analyzeXrayWithGemini(imageBytes, mime, patientContext)
+        db.xrayCache = db.xrayCache || []
+        db.xrayCache.unshift({ key: cacheKey, created_by: email, analysis, created_date: new Date().toISOString() })
+        if (db.xrayCache.length > 500) db.xrayCache = db.xrayCache.slice(0, 500)
+        saveDb(db)
+        return json(res, 200, { analysis, cached: false, ia_configurada: true, provedor: 'gemini', modelo: GEMINI_MODEL })
       } catch (e) { return json(res, 502, { error: `Falha na análise com Gemini: ${e.message}` }) }
     }
 
